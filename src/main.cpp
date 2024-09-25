@@ -25,7 +25,6 @@
  */
 
 #include <Arduino.h>
-#include <ArduinoOTA.h>
 #include <FastLED.h>
 #include <WiFi.h>
 
@@ -37,6 +36,7 @@
 #include "FSM.h"
 #include "FSMGlobals.h"
 #include "util.h"
+#include "SecondCore.h"
 
 // Global objects and states
 constexpr unsigned int INTERVAL_BATTERY_CHECK = 10000;
@@ -257,7 +257,10 @@ void setup() {
 
     // Get FSM going
     fsm.resume();
-	
+
+    // Start the second core
+    StartSecondCore();
+    EFLed.setOverrides(led_overrides, led_override_values);
 }
 
 /**

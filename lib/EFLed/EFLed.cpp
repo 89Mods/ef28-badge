@@ -65,15 +65,12 @@ void EFLedClass::init(const uint8_t absolute_max_brightness) {
     for (uint8_t i = 0; i < EFLED_TOTAL_NUM; i++) {
         this->led_data[i] = CRGB::Black;
     }
-    LOG_INFO("(EFLed) Initialized internal LED data struct");
 
     FastLED.clearData();
     FastLED.addLeds<WS2812B, EFLED_PIN_LED_DATA, GRB>(this->led_data, EFLED_TOTAL_NUM);
-    LOGF_DEBUG("(EFLed) Added new WS2812B: %d LEDs @ PIN %d\r\n", EFLED_TOTAL_NUM, EFLED_PIN_LED_DATA);
 
     this->max_brightness = absolute_max_brightness;
     FastLED.setBrightness(this->max_brightness);
-    LOGF_DEBUG("(EFLed) Set max_brightness=%d\r\n", this->max_brightness)
 
     enablePower();
 }
@@ -81,13 +78,11 @@ void EFLedClass::init(const uint8_t absolute_max_brightness) {
 void EFLedClass::enablePower() {
     pinMode(EFLED_PIN_5VBOOST_ENABLE, OUTPUT);
     digitalWrite(EFLED_PIN_5VBOOST_ENABLE, HIGH);
-    LOG_INFO("(EFLed) Enabled +5V boost converter");
     delay(1);
 }
 
 void EFLedClass::disablePower() {
     digitalWrite(EFLED_PIN_5VBOOST_ENABLE, LOW);
-    LOG_INFO("(EFLed) Disabled +5V boost converter");
     delay(10);
 }
 
@@ -95,12 +90,12 @@ void EFLedClass::clear() {
     for (uint8_t i = 0; i < EFLED_TOTAL_NUM; i++) {
         this->led_data[i] = CRGB::Black;
     }
-    FastLED.show();
+    this->ledsShow();
 }
 
 void EFLedClass::setBrightnessPercent(uint8_t brightness) {
     FastLED.setBrightness(round((min(brightness, (uint8_t) 100) / (float) 100) * this->max_brightness));
-    FastLED.show();
+    this->ledsShow();
 }
 
 uint8_t EFLedClass::getBrightnessPercent() const {
@@ -111,58 +106,58 @@ void EFLedClass::setAll(const CRGB color[EFLED_TOTAL_NUM]) {
     for (uint8_t i = 0; i < EFLED_TOTAL_NUM; i++) {
         this->led_data[i] = color[i];
     }
-    FastLED.show();
+    this->ledsShow();
 }
 
 void EFLedClass::setAllSolid(const CRGB color) {
     for (uint8_t i = 0; i < EFLED_TOTAL_NUM; i++) {
         this->led_data[i] = color;
     }
-    FastLED.show();
+    this->ledsShow();
 }
 
 void EFLedClass::setDragonNose(const CRGB color) {
     this->led_data[EFLED_DRAGON_NOSE_IDX] = color;
-    FastLED.show();
+    this->ledsShow();
 }
 
 void EFLedClass::setDragonMuzzle(const CRGB color) {
     this->led_data[EFLED_DRAGON_MUZZLE_IDX] = color;
-    FastLED.show();
+    this->ledsShow();
 }
 
 void EFLedClass::setDragonEye(const CRGB color) {
     this->led_data[EFLED_DRAGON_EYE_IDX] = color;
-    FastLED.show();
+    this->ledsShow();
 }
 
 void EFLedClass::setDragonCheek(const CRGB color) {
     this->led_data[EFLED_DRAGON_CHEEK_IDX] = color;
-    FastLED.show();
+    this->ledsShow();
 }
 
 void EFLedClass::setDragonEarBottom(const CRGB color) {
     this->led_data[EFLED_DRAGON_EAR_BOTTOM_IDX] = color;
-    FastLED.show();
+    this->ledsShow();
 }
 
 void EFLedClass::setDragonEarTop(const CRGB color) {
     this->led_data[EFLED_DRAGON_EAR_TOP_IDX] = color;
-    FastLED.show();
+    this->ledsShow();
 }
 
 void EFLedClass::setDragon(const CRGB color[EFLED_DRAGON_NUM]) {
     for (uint8_t i = 0; i < EFLED_DRAGON_NUM; i++) {
         this->led_data[EFLED_DARGON_OFFSET + i] = color[i];
     }
-    FastLED.show();
+    this->ledsShow();
 }
 
 void EFLedClass::setEFBar(const CRGB color[EFLED_EFBAR_NUM]) {
     for (uint8_t i = 0; i < EFLED_EFBAR_NUM; i++) {
         this->led_data[EFLED_EFBAR_OFFSET + i] = color[i];
     }
-    FastLED.show();
+    this->ledsShow();
 }
 
 void EFLedClass::setEFBar(uint8_t idx, const CRGB color) {
@@ -171,6 +166,22 @@ void EFLedClass::setEFBar(uint8_t idx, const CRGB color) {
     }
 
     this->led_data[EFLED_EFBAR_OFFSET + idx] = color;
+    this->ledsShow();
+}
+
+void EFLedClass::setOverrides(volatile uint8_t* overrides, volatile uint32_t* override_values) {
+    this->led_override_values = override_values;
+    this->led_overrides = overrides;
+    this->ledsShow();
+}
+
+void EFLedClass::ledsShow() {
+    if(this->led_overrides != nullptr && this->led_override_values != nullptr) {
+        for(uint8_t i = 0; i < EFLED_TOTAL_NUM; i++) {
+            if(!this->led_overrides[i]) continue;
+            this->led_data[i] = this->led_override_values[i];
+        }
+    }
     FastLED.show();
 }
 
@@ -184,7 +195,7 @@ void EFLedClass::setEFBarCursor(
         uint8_t fade = static_cast<uint8_t>(std::clamp(distance * 64.0f, 0.0f, 255.0f));
         this->led_data[EFLED_EFBAR_OFFSET + i] = (i == idx) ? color_on : color_off.scale8(fade);
     }
-    FastLED.show();
+    this->ledsShow();
 }
 
 EFLedClass::LEDPosition EFLedClass::getLEDPosition(const uint8_t idx) {
@@ -206,7 +217,7 @@ void EFLedClass::fillEFBarProportionally(
     for (uint8_t i = num_leds_on; i < EFLED_EFBAR_NUM; i++) {
         this->led_data[EFLED_EFBAR_OFFSET + i] = color_off;
     }
-    FastLED.show();
+    this->ledsShow();
 }
 
 #if !defined(NO_GLOBAL_INSTANCES) && !defined(NO_GLOBAL_EFLED)

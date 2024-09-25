@@ -77,11 +77,6 @@ std::unique_ptr<FSMState> AnimateRainbow::touchEventFingerprintRelease() {
     this->tick = 0;
     EFLed.clear();
 
-    LOGF_INFO(
-        "(AnimateRainbow) Changed animation mode to: %d\r\n",
-        this->globals->animRainbowIdx % ANIMATE_RAINBOW_NUM_TOTAL
-    );
-
     return nullptr;
 }
 

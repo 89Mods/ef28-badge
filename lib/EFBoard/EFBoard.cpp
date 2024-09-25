@@ -25,7 +25,6 @@
  */
 
 #include <Arduino.h>
-#include <ArduinoOTA.h>
 #include <WiFi.h>
 
 #include <EFLed.h>
@@ -43,6 +42,7 @@ EFBoardClass::EFBoardClass()
 }
 
 void EFBoardClass::setup() {
+    sleep(3);
     // Setup serial
     // If flashing often fails, you can add a safety-backoff delay before running serial which helps with flashing
     //delay(2000);
@@ -55,7 +55,7 @@ void EFBoardClass::setup() {
 
     // Board initialization process
     LOG_INFO("(EFBoard) Initializing badge ...");
-    LOGF_INFO("(EFBoard) Boot #%d - %s\r\n", this->getWakeupCount(), this->getWakeupReason());
+    LOGF_INFO("(EFBoard) Boot #%d\r\n", this->getWakeupCount());
     LOGF_INFO("(EFBoard) Firmware version: %s (compiled: %s @ %s)\r\n", EFBOARD_FIRMWARE_VERSION, __DATE__, __TIME__);
 
     // CPU frequency
@@ -65,9 +65,7 @@ void EFBoardClass::setup() {
 
     // Initialize ADC for V_BAT measuring
     analogReadResolution(12);
-    LOG_DEBUG("(EFBoard) Set ADC read resolution to: 12 bit");
     pinMode(EFBOARD_PIN_VBAT, INPUT);
-    LOG_INFO("(EFBoard) Initialized battery sense ADC")
 
     // Seed rnd
     randomSeed(analogRead(0));
@@ -96,45 +94,13 @@ void EFBoardClass::setup() {
 
     // Wifi modem stuff
     this->disableWifi();
-    this->disableOTA();
+    if(!this->connectToWifi("Avalon-central-computer-core", "cutest-birb-tholin-621")) this->disableWifi();
 
     LOG_INFO("(EFBoard) Initialization complete")
 }
 
 unsigned int EFBoardClass::getWakeupCount() {
     return bootCount;
-}
-
-const char *EFBoardClass::getWakeupReason() {
-    esp_sleep_wakeup_cause_t wakeup_reason;
-    wakeup_reason = esp_sleep_get_wakeup_cause();
-
-    switch (wakeup_reason) {
-        case ESP_SLEEP_WAKEUP_EXT0:
-            return "Wakeup caused by external signal using RTC_IO";
-        case ESP_SLEEP_WAKEUP_EXT1:
-            return "Wakeup caused by external signal using RTC_CNTL";
-        case ESP_SLEEP_WAKEUP_TIMER:
-            return "Wakeup caused by timer";
-        case ESP_SLEEP_WAKEUP_TOUCHPAD:
-            return "Wakeup caused by touchpad";
-        case ESP_SLEEP_WAKEUP_ULP:
-            return "Wakeup caused by ULP program";
-        case ESP_SLEEP_WAKEUP_GPIO:
-            return "Wakeup caused by GPIO";
-        case ESP_SLEEP_WAKEUP_UART:
-            return "Wakeup caused by UART";
-        case ESP_SLEEP_WAKEUP_WIFI:
-            return "Wakeup casued by WIFI";
-        case ESP_SLEEP_WAKEUP_COCPU:
-            return "Wakeup caused by coprocessor interrupt";
-        case ESP_SLEEP_WAKEUP_COCPU_TRAP_TRIG:
-            return "Wakeup caused by coprocessor CRASH";
-        case ESP_SLEEP_WAKEUP_BT:
-            return "Wakeup caused by Bluetooth";
-        default:
-            return "Wakeup was not caused by deep sleep (regular boot)";
-    }
 }
 
 const float EFBoardClass::getBatteryVoltage() {
@@ -189,7 +155,6 @@ const EFBoardPowerState EFBoardClass::updatePowerState() {
                 delay(1);
             }
             vbat = sum / samples;
-            LOGF("BATTERY: Measurement average: %f\r\n", vbat);
         }
 
         if (vbat <= EFBOARD_BROWN_OUT_HARD || this->power_state == EFBoardPowerState::BAT_BROWN_OUT_HARD) {
@@ -251,88 +216,10 @@ bool EFBoardClass::connectToWifi(const char *ssid, const char *password) {
 bool EFBoardClass::disableWifi() {
     WiFi.disconnect(true, true);
     if (!WiFi.enableSTA(false)) {
-        LOG_ERROR("(EFBoard) Failed to disable WiFi");
         return false;
     }
 
-    LOG_INFO("(EFBoard) Disabled WiFi");
     return true;
-}
-
-void EFBoardClass::enableOTA(const char *password) {
-    LOG_INFO("(EFBoard) Initializing OTA ... ");
-
-    if (password) {
-        ArduinoOTA.setPassword(password);
-        LOG_INFO("(EFBoard)   -> Enabling password protection");
-    } else {
-        LOG_WARNING("(EFBoard)   -> Using NO PASSWORD PROTECTION!");
-    }
-
-    ArduinoOTA
-            .onStart([]() {
-                if (ArduinoOTA.getCommand() == U_FLASH) {
-                    LOG_INFO("(OTA) Start OTA update of U_FLASH ...");
-                } else {
-                    LOG_INFO("(OTA) Starting OTA update of U_SPIFFS ...");
-                }
-
-                // Reset progress
-                ota_last_progress = -1;
-
-                // Setup LEDs
-                EFLed.clear();
-                EFLed.setBrightnessPercent(50);
-                EFLed.setDragonEye(CRGB::Blue);
-            })
-            .onEnd([]() {
-                LOG_INFO("(OTA) Finished! Rebooting ...");
-                for (uint8_t i = 0; i < 3; i++) {
-                    EFLed.setDragonEye(CRGB::Green);
-                    delay(500);
-                    EFLed.setDragonEye(CRGB::Black);
-                    delay(500);
-                }
-                EFLed.clear();
-            })
-            .onProgress([](unsigned int progress, unsigned int total) {
-                uint8_t progresspercent = (progress / (total / 100));
-                if (ota_last_progress < progresspercent) {
-                    ota_last_progress = progresspercent;
-                    EFLed.fillEFBarProportionally(progresspercent, CRGB::Red, CRGB::Black);
-                    LOGF_INFO("(OTA) Progress: %u%%\r\n", progresspercent);
-                }
-            })
-            .onError([](ota_error_t error) {
-                LOGF_ERROR("(OTA) Error[%u]: ", error);
-                EFLed.setDragonNose(CRGB::Red);
-                if (error == OTA_AUTH_ERROR) {
-                    LOG_WARNING("(OTA) Auth Failed");
-                    EFLed.setDragonNose(CRGB::Purple);
-                } else if (error == OTA_BEGIN_ERROR) {
-                    EFLed.setDragonNose(CRGB::Green);
-                    LOG_ERROR("(OTA) Begin Failed");
-                } else if (error == OTA_CONNECT_ERROR) {
-                    EFLed.setDragonNose(CRGB::Purple);
-                    LOG_ERROR("(OTA) Connect Failed");
-                } else if (error == OTA_RECEIVE_ERROR) {
-                    EFLed.setDragonNose(CRGB::Blue);
-                    LOG_ERROR("(OTA) Receive Failed");
-                } else if (error == OTA_END_ERROR) {
-                    EFLed.setDragonNose(CRGB::Yellow);
-                    LOG_ERROR("(OTA) End Failed");
-                }
-            });
-
-    ArduinoOTA.begin();
-
-    LOG_INFO("(EFBoard)   -> Setup OTA listeners");
-    LOG_INFO("(EFBoard) Enabled OTA");
-}
-
-void EFBoardClass::disableOTA() {
-    ArduinoOTA.end();
-    LOG_INFO("(EFBoard) Disabled OTA");
 }
 
 void EFBoardClass::printCredits() {

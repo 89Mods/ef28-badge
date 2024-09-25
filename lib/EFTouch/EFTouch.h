@@ -203,38 +203,6 @@ class EFTouchClass {
         void attachInterruptOnLongpress(EFTouchZone zone, void ARDUINO_ISR_ATTR (*isr)(void));
 
         /**
-         * @brief Detatches the ISR attached by attachInterruptOnTouch() for the given
-         * touch zone, if any.
-         * 
-         * @param zone Touch zone to detatch the ISR from.
-         */
-        void detatchInterruptOnTouch(EFTouchZone zone);
-
-        /**
-         * @brief Detatches the ISR attached by attachInterruptOnRelease() for the given
-         * touch zone, if any.
-         * 
-         * @param zone Touch zone to detatch the ISR from.
-         */
-        void detatchInterruptOnRelease(EFTouchZone zone);
-
-        /**
-         * @brief Detatches the ISR attached by attachInterruptOnShortpress() for the
-         * given touch zone, if any.
-         * 
-         * @param zone Touch zone to detatch the ISR from.
-         */
-        void detatchInterruptOnShortpress(EFTouchZone zone);
-
-        /**
-         * @brief Detatches the ISR attached by attachInterruptOnLongpress() for the
-         * given touch zone, if any.
-         * 
-         * @param zone Touch zone to detatch the ISR from.
-         */
-        void detatchInterruptOnLongpress(EFTouchZone zone);
-
-        /**
          * @brief INTERNAL interrupt handler. DO NOT EXECUTE DIRECTLY!
          * 
          * @param zone Touch zone the interrupt was fired for

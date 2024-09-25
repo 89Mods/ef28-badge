@@ -166,43 +166,33 @@ void FSM::handle(unsigned int num_events) {
         // Propagate event to current state
         switch(event) {
             case FSMEvent::FingerprintTouch:
-                LOGF_DEBUG("(FSM) Processing Event: FingerprintTouch@%s\r\n", this->state->getName());
                 next = this->state->touchEventFingerprintTouch();
                 break;
             case FSMEvent::FingerprintRelease:
-                LOGF_DEBUG("(FSM) Processing Event: FingerprintRelease@%s\r\n", this->state->getName());
                 next = this->state->touchEventFingerprintRelease();
                 break;
             case FSMEvent::FingerprintShortpress:
-                LOGF_DEBUG("(FSM) Processing Event: FingerprintShortpress@%s\r\n", this->state->getName());
                 next = this->state->touchEventFingerprintShortpress();
                 break;
             case FSMEvent::FingerprintLongpress:
-                LOGF_DEBUG("(FSM) Processing Event: FingerprintLongpress@%s\r\n", this->state->getName());
                 next = this->state->touchEventFingerprintLongpress();
                 break;
             case FSMEvent::NoseTouch:
-                LOGF_DEBUG("(FSM) Processing Event: NoseTouch@%s\r\n", this->state->getName());
                 next = this->state->touchEventNoseTouch();
                 break;
             case FSMEvent::NoseRelease:
-                LOGF_DEBUG("(FSM) Processing Event: NoseRelease@%s\r\n", this->state->getName());
                 next = this->state->touchEventNoseRelease();
                 break;
             case FSMEvent::NoseShortpress:
-                LOGF_DEBUG("(FSM) Processing Event: NoseShortpress@%s\r\n", this->state->getName());
                 next = this->state->touchEventNoseShortpress();
                 break;
             case FSMEvent::NoseLongpress:
-                LOGF_DEBUG("(FSM) Processing Event: NoseLongpress@%s\r\n", this->state->getName());
                 next = this->state->touchEventNoseLongpress();
                 break;
             case FSMEvent::AllShortpress:
-                LOGF_DEBUG("(FSM) Processing Event: AllShortpress@%s\r\n", this->state->getName());
                 next = this->state->touchEventAllShortpress();
                 break;
             case FSMEvent::AllLongpress:
-                LOGF_DEBUG("(FSM) Processing Event: AllLongpress@%s\r\n", this->state->getName());
                 next = this->state->touchEventAllLongpress();
                 break;
             case FSMEvent::NoOp:
@@ -221,58 +211,33 @@ void FSM::handle(unsigned int num_events) {
 
 void FSM::persistGlobals() {
     pref.begin(this->NVS_NAMESPACE, false);
-    LOGF_INFO("(FSM) Persisting FSM state data to NVS area: %s\r\n", this->NVS_NAMESPACE);
     pref.clear();
-    LOG_DEBUG("(FSM)  -> Clear storage area");
     pref.putUInt("resumeStateIdx", this->globals->resumeStateIdx);
-    LOGF_DEBUG("(FSM)  -> resumeStateIdx = %d\r\n", this->globals->resumeStateIdx);
     pref.putUInt("menuIdx", this->globals->menuMainPointerIdx);
-    LOGF_DEBUG("(FSM)  -> menuIdx = %d\r\n", this->globals->menuMainPointerIdx);
     pref.putUInt("prideFlagMode", this->globals->prideFlagModeIdx);
-    LOGF_DEBUG("(FSM)  -> prideFlagMode = %d\r\n", this->globals->prideFlagModeIdx);
     pref.putUInt("animRainbow", this->globals->animRainbowIdx);
-    LOGF_DEBUG("(FSM)  -> animRainbow = %d\r\n", this->globals->animRainbowIdx);
     pref.putUInt("animSnakeIdx", this->globals->animSnakeAnimationIdx);
-    LOGF_DEBUG("(FSM)  -> animSnakeIdx = %d\r\n", this->globals->animSnakeAnimationIdx);
     pref.putUInt("animSnakeHueIdx", this->globals->animSnakeHueIdx);
-    LOGF_DEBUG("(FSM)  -> animSnakeHueIdx = %d\r\n", this->globals->animSnakeHueIdx);
     pref.putUInt("animHbHue", this->globals->animHeartbeatHue);
-    LOGF_DEBUG("(FSM)  -> animHbHue = %d\r\n", this->globals->animHeartbeatHue);
     pref.putUInt("animHbSpeed", this->globals->animHeartbeatSpeed);
-    LOGF_DEBUG("(FSM)  -> animHbSpeed = %d\r\n", this->globals->animHeartbeatSpeed);
     pref.putUInt("animMatrixIdx", this->globals->animMatrixIdx);
-    LOGF_DEBUG("(FSM)  -> animMatrixIdx = %d\r\n", this->globals->animMatrixIdx);
     pref.putUInt("ledBrightPcent", this->globals->ledBrightnessPercent);
-    LOGF_DEBUG("(FSM)  -> ledBrightPcent = %d\r\n", this->globals->ledBrightnessPercent);
 	pref.putUInt("huemeshOwnHue", this->globals->huemeshOwnHue);
-    LOGF_DEBUG("(FSM)  -> huemeshOwnHue = %d\r\n", this->globals->huemeshOwnHue);
     pref.end();
 }
 
 void FSM::restoreGlobals() {
     pref.begin(this->NVS_NAMESPACE, true);
-    LOGF_INFO("(FSM) Restoring FSM state data from NVS area: %s\r\n", this->NVS_NAMESPACE);
     this->globals->resumeStateIdx = pref.getUInt("resumeStateIdx", random(0, 3));
-    LOGF_DEBUG("(FSM)  -> resumeStateIdx = %d\r\n", this->globals->resumeStateIdx);
     this->globals->menuMainPointerIdx = pref.getUInt("menuIdx", 0);
-    LOGF_DEBUG("(FSM)  -> menuIdx = %d\r\n", this->globals->menuMainPointerIdx);
     this->globals->prideFlagModeIdx = pref.getUInt("prideFlagMode", 1);
-    LOGF_DEBUG("(FSM)  -> prideFlagMode = %d\r\n", this->globals->prideFlagModeIdx);
     this->globals->animRainbowIdx = pref.getUInt("animRainbow", 0);
-    LOGF_DEBUG("(FSM)  -> animRainbow = %d\r\n", this->globals->animRainbowIdx);
     this->globals->animSnakeAnimationIdx = pref.getUInt("animSnakeIdx", 0);
-    LOGF_DEBUG("(FSM)  -> animSnakeIdx = %d\r\n", this->globals->animSnakeAnimationIdx);
     this->globals->animSnakeHueIdx = pref.getUInt("animSnakeHueIdx", 0);
-    LOGF_DEBUG("(FSM)  -> animSnakeHueIdx = %d\r\n", this->globals->animSnakeHueIdx);
     this->globals->animHeartbeatHue = pref.getUInt("animHbHue", 0);
-    LOGF_DEBUG("(FSM)  -> animHbHue = %d\r\n", this->globals->animHeartbeatHue);
     this->globals->animHeartbeatSpeed = pref.getUInt("animHbSpeed", 1);
-    LOGF_DEBUG("(FSM)  -> animHbSpeed = %d\r\n", this->globals->animHeartbeatSpeed);
     this->globals->animMatrixIdx = pref.getUInt("animMatrixIdx", 0);
-    LOGF_DEBUG("(FSM)  -> animMatrixIdx = %d\r\n", this->globals->animMatrixIdx);
     this->globals->ledBrightnessPercent = pref.getUInt("ledBrightPcent", 40);
-    LOGF_DEBUG("(FSM)  -> ledBrightPcent = %d\r\n", this->globals->ledBrightnessPercent);
 	this->globals->huemeshOwnHue = pref.getUInt("huemeshOwnHue", 0);
-    LOGF_DEBUG("(FSM)  -> huemeshOwnHue = %d\r\n", this->globals->huemeshOwnHue);
     pref.end();
 }

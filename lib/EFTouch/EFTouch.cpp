@@ -80,9 +80,6 @@ void EFTouchClass::init(touch_value_t detection_step, uint8_t pin_fingerprint, u
     this->onNoseShortpressIsr = nullptr;
     this->onNoseLongpressIsr = nullptr;
 
-    LOGF_INFO("(EFTouch) Initialized EFTouch instance with detection_step=%d\r\n", detection_step);
-    LOGF_DEBUG("(EFTouch) Registered: pin_fingerprint=%d pin_nose=%d\r\n", pin_fingerprint, pin_nose);
-
     this->calibrate();
     this->enableInterrupts(EFTouchZone::Fingerprint);
     this->enableInterrupts(EFTouchZone::Nose);
@@ -170,7 +167,6 @@ void EFTouchClass::enableInterrupts(EFTouchZone zone) {
                 _eftouch_isr_fingerprint,
                 this->detection_step
             );
-            LOG_INFO("(EFTouch) Enabled fingerprint interrupts");
             break;
         case EFTouchZone::Nose:
             touchAttachInterrupt(
@@ -178,7 +174,6 @@ void EFTouchClass::enableInterrupts(EFTouchZone zone) {
                 _eftouch_isr_nose,
                 this->detection_step
             );
-            LOG_INFO("(EFTouch) Enabled nose interrupts");
             break;
         default:
             LOGF_ERROR("(EFTouch) Cannot enable interrupts for invalid touch zone: %d\r\n", zone);
@@ -190,11 +185,9 @@ void EFTouchClass::disableInterrupts(EFTouchZone zone) {
     switch (zone) {
         case EFTouchZone::Fingerprint:
             touchDetachInterrupt(this->pin_fingerprint);
-            LOG_INFO("(EFTouch) Disabled fingerprint interrupts");
             break;
         case EFTouchZone::Nose:
             touchDetachInterrupt(this->pin_nose);
-            LOG_INFO("(EFTouch) Disabled nose interrupts");
             break;
         default:
             LOGF_ERROR("(EFTouch) Cannot disable interrupts for invalid touch zone: %d\r\n", zone);
@@ -320,19 +313,15 @@ void EFTouchClass::attachInterruptOnTouch(EFTouchZone zone, void ARDUINO_ISR_ATT
         case EFTouchZone::Fingerprint:
             if (isr) {
                 this->onFingerprintTouchIsr = isr;
-                LOG_INFO("(EFTouch) Attached onTouch interrupt to fingerprint zone");
             } else {
                 this->onFingerprintTouchIsr = nullptr;
-                LOG_INFO("(EFTouch) Detached onTouch interrupt from fingerprint zone");
             }
             break;
         case EFTouchZone::Nose:
             if (isr) {
                 this->onNoseTouchIsr = isr;
-                LOG_INFO("(EFTouch) Attached onTouch interrupt to nose zone");
             } else {
                 this->onNoseTouchIsr = nullptr;
-                LOG_INFO("(EFTouch) Detatched onTouch interrupt from nose zone");
             }
             break;
         default:
@@ -349,19 +338,15 @@ void EFTouchClass::attachInterruptOnRelease(EFTouchZone zone, void ARDUINO_ISR_A
         case EFTouchZone::Fingerprint:
             if (isr) {
                 this->onFingerprintReleaseIsr = isr;
-                LOG_INFO("(EFTouch) Attached onRelease interrupt to fingerprint zone");
             } else {
                 this->onFingerprintReleaseIsr = nullptr;
-                LOG_INFO("(EFTouch) Detached onRelease interrupt from fingerprint zone");
             }
             break;
         case EFTouchZone::Nose:
             if (isr) {
                 this->onNoseReleaseIsr = isr;
-                LOG_INFO("(EFTouch) Attached onRelease interrupt to nose zone");
             } else {
                 this->onNoseReleaseIsr = nullptr;
-                LOG_INFO("(EFTouch) Detatched onRelease interrupt from nose zone");
             }
             break;
         default:
@@ -375,28 +360,22 @@ void EFTouchClass::attachInterruptOnShortpress(EFTouchZone zone, void ARDUINO_IS
         case EFTouchZone::All:
             if (isr) {
                 this->onAllShortpressIsr = isr;
-                LOG_INFO("(EFTouch) Attached onShortpress interrupt to the combined 'All' zone");
             } else {
                 this->onAllShortpressIsr = nullptr;
-                LOG_INFO("(EFTouch) Detached onShortpress interrupt from the combined 'All' zone");
             }
             break;
         case EFTouchZone::Fingerprint:
             if (isr) {
                 this->onFingerprintShortpressIsr = isr;
-                LOG_INFO("(EFTouch) Attached onShortpress interrupt to fingerprint zone");
             } else {
                 this->onFingerprintShortpressIsr = nullptr;
-                LOG_INFO("(EFTouch) Detached onShortpress interrupt from fingerprint zone");
             }
             break;
         case EFTouchZone::Nose:
             if (isr) {
                 this->onNoseShortpressIsr = isr;
-                LOG_INFO("(EFTouch) Attached onShortpress interrupt to nose zone");
             } else {
                 this->onNoseShortpressIsr = nullptr;
-                LOG_INFO("(EFTouch) Detatched onShortpress interrupt from nose zone");
             }
             break;
         default:
@@ -410,50 +389,28 @@ void EFTouchClass::attachInterruptOnLongpress(EFTouchZone zone, void ARDUINO_ISR
         case EFTouchZone::All:
             if (isr) {
                 this->onAllLongpressIsr = isr;
-                LOG_INFO("(EFTouch) Attached onLongpress interrupt to the combined 'All' touch zone");
             } else {
                 this->onAllLongpressIsr = nullptr;
-                LOG_INFO("(EFTouch) Detached onLongpress interrupt from the combined 'All' touch zone");
             }
             break;
         case EFTouchZone::Fingerprint:
             if (isr) {
                 this->onFingerprintLongpressIsr = isr;
-                LOG_INFO("(EFTouch) Attached onLongpress interrupt to fingerprint zone");
             } else {
                 this->onFingerprintLongpressIsr = nullptr;
-                LOG_INFO("(EFTouch) Detached onLongpress interrupt from fingerprint zone");
             }
             break;
         case EFTouchZone::Nose:
             if (isr) {
                 this->onNoseLongpressIsr = isr;
-                LOG_INFO("(EFTouch) Attached onLongpress interrupt to nose zone");
             } else {
                 this->onNoseLongpressIsr = nullptr;
-                LOG_INFO("(EFTouch) Detatched onLongpress interrupt from nose zone");
             }
             break;
         default:
             LOGF_ERROR("(EFTouch) Cannot attach onLongpress interrupt to invalid touch zone: %d\r\n", zone);
             break;
     }
-}
-
-void EFTouchClass::detatchInterruptOnTouch(EFTouchZone zone) {
-    this->attachInterruptOnTouch(zone, nullptr);
-}
-
-void EFTouchClass::detatchInterruptOnRelease(EFTouchZone zone) {
-    this->attachInterruptOnRelease(zone, nullptr);
-}
-
-void EFTouchClass::detatchInterruptOnShortpress(EFTouchZone zone) {
-    this->attachInterruptOnShortpress(zone, nullptr);
-}
-
-void EFTouchClass::detatchInterruptOnLongpress(EFTouchZone zone) {
-    this->attachInterruptOnLongpress(zone, nullptr);
 }
 
 

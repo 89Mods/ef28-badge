@@ -69,10 +69,12 @@ class EFLedClass {
 
         CRGB led_data[EFLED_TOTAL_NUM];  //!< Internal LED data structure
         uint8_t max_brightness;  //!< Maximum raw brightness (0-255)
-
+        volatile uint8_t* led_overrides = nullptr;
+        volatile uint32_t* led_override_values = nullptr;
 
     public:
-
+        void setOverrides(volatile uint8_t* overrides, volatile uint32_t* override_values);
+        void ledsShow();
         /**
         * @brief Structure to hold x and y coordinates in millimeters
         */

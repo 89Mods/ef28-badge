@@ -60,7 +60,7 @@ void EFBoardClass::setup() {
 
     // CPU frequency
     LOGF_DEBUG("(EFBoard) Initial CPU frequency: %d\r\n", getCpuFrequencyMhz());
-    setCpuFrequencyMhz(80);
+    setCpuFrequencyMhz(240);
     LOGF_INFO("(EFBoard) Set CPU frequency to: %d\r\n", getCpuFrequencyMhz());
 
     // Initialize ADC for V_BAT measuring

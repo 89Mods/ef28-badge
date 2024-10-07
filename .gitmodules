@@ -1,0 +1,3 @@
+[submodule "mini-rv32ima"]
+	path = mini-rv32ima
+	url = https://github.com/89Mods/mini-rv32ima

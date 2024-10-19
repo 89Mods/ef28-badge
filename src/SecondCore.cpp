@@ -1,10 +1,15 @@
 #include <Arduino.h>
+#include <Preferences.h>
 #include <EFLogging.h>
 #include <SDRAM.h>
 #include <WiFiClientSecure.h>
+#include <EFTouch.h>
 
 #define SECOND_CORE_IMPL
 #include "SecondCore.h"
+#include "util.h"
+
+Preferences pref2;
 
 //SecondCore.h thingies
 TaskHandle_t Task2;
@@ -72,6 +77,17 @@ const uint32_t RAM_SIZE = 16777216UL; // Minimum RAM amount (in bytes), just tes
 SDRAM first_chip(GPIO_NUM_11);
 SDRAM second_chip(GPIO_NUM_47);
 
+bool watchdog_enabled = false;
+bool watchdog_clr_edge = false;
+bool leds_latch_edge = false;
+uint64_t last_watchdog_time;
+
+void err_leds() {
+    for(uint8_t i = 0; i < EFLED_TOTAL_NUM; i++) led_overrides[i] = 0;
+    EFLed.setAllSolid(CRGB::Red);
+    EFLed.ledsShow();
+}
+
 uint32_t rng_state;
 
 uint32_t xorshift32() {
@@ -124,9 +140,13 @@ void Task2main(void* pvParameters) {
     sleep(3);
     LOG_INFO("(2nd Core) I’m alive!");
     first_chip.init();
+full_emulator_reset:
     first_chip.reset();
     second_chip.reset();
     rng_state = 0xABC89105;
+    watchdog_enabled = false;
+    watchdog_clr_edge = false;
+    leds_latch_edge = false;
 
     //A few iterations of simple write/readback test for the PSRAM
     bool ram_okay = true;
@@ -381,8 +401,19 @@ void Task2main(void* pvParameters) {
 #ifdef IMPLEMENT_CACHE
                 free_cache();
 #endif
+                err_leds();
                 vTaskDelete(NULL);
                 break;
+        }
+        if(watchdog_enabled && (millis() - last_watchdog_time) > 15000) {
+            LOG_FATAL("mini-rv32ima watchdog timer expired");
+            err_leds();
+            free(core);
+            free_cache();
+            sleep(5);
+            EFLed.clear();
+            EFLed.ledsShow();
+            goto full_emulator_reset;
         }
     }while(true);
 }
@@ -404,6 +435,9 @@ void gpioWrite(uint8_t gpio_idx, uint8_t reg, uint32_t val) {
     //But gotta fix that here
 	uint32_t nv = val >> 8;
 	nv |= val << 24;
+    if(gpio_idx == 17) {
+        nv = val >> 24;   
+    }
     if(reg == 0x04) gpio_data_buffers[gpio_idx] = nv & 0x01FFFFFF;
     if(reg == 0x08) gpio_dir_buffers[gpio_idx] = nv & 0x01FFFFFF;
     if(reg == 0x54) gpio_data_buffers[gpio_idx] |= nv & 0x01FFFFFF;
@@ -419,6 +453,23 @@ void gpioWrite(uint8_t gpio_idx, uint8_t reg, uint32_t val) {
         led_override_values[i] |= (gpio_data_buffers[i] & 0x000000FF) << 16;
         led_override_values[i] |= (gpio_data_buffers[i] & 0x00FF0000) >> 16;
     }
+    bool leds_latch = (gpio_data_buffers[17] & 8) != 0;
+    if(leds_latch && !leds_latch_edge) {
+        EFLed.ledsShow();
+
+        pref2.begin(PREF_SPACE, false);
+        pref2.putUInt("ledBrightPcent", EFLed.getBrightnessPercent());
+        pref2.end();
+    }
+    leds_latch_edge = leds_latch;
+    bool watchdog_en = (gpio_data_buffers[17] & 16) != 0;
+    bool watchdog_clr = (gpio_data_buffers[17] & 32) != 0;
+    if((watchdog_en && !watchdog_enabled) || (watchdog_clr && !watchdog_clr_edge)) {
+        watchdog_clr_edge = false;
+        last_watchdog_time = millis();
+    }
+    watchdog_enabled = watchdog_en;
+    watchdog_clr_edge = watchdog_clr;
 }
 
 uint32_t gpioRead(uint8_t gpio_idx, uint8_t reg) {
@@ -427,8 +478,7 @@ uint32_t gpioRead(uint8_t gpio_idx, uint8_t reg) {
         if(gpio_idx == 17) {
             //Only gpio with inputs
             //Bit 0 is always 1
-            //TODO: forward snoot boop button in bit 1
-            return 8;
+            return (1 | (EFTouch.isFingerprintTouched() ? 2 : 0) | (EFTouch.isNoseTouched() ? 4 : 0)) << 24;
         }
         return 0;
     }

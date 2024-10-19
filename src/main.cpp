@@ -25,6 +25,7 @@
  */
 
 #include <Arduino.h>
+#include <Preferences.h>
 #include <FastLED.h>
 #include <WiFi.h>
 
@@ -33,8 +34,8 @@
 #include <EFLed.h>
 #include <EFTouch.h>
 
-#include "FSM.h"
-#include "FSMGlobals.h"
+Preferences pref;
+
 #include "util.h"
 #include "SecondCore.h"
 
@@ -42,7 +43,6 @@
 constexpr unsigned int INTERVAL_BATTERY_CHECK = 10000;
 // Initializing the board with a brightness above 48 can cause stability issues!
 constexpr uint8_t ABSOLUTE_MAX_BRIGHTNESS = 45;
-FSM fsm(10);
 EFBoardPowerState pwrstate;
 
 // Task counters
@@ -244,19 +244,15 @@ void setup() {
     
     // Touchy stuff
     EFTouch.init();
-    EFTouch.attachInterruptOnTouch(EFTouchZone::Fingerprint, isr_fingerprintTouch);
-    EFTouch.attachInterruptOnRelease(EFTouchZone::Fingerprint, isr_fingerprintRelease);
-    EFTouch.attachInterruptOnShortpress(EFTouchZone::Fingerprint, isr_fingerprintShortpress);
-    EFTouch.attachInterruptOnLongpress(EFTouchZone::Fingerprint, isr_fingerprintLongpress);
-    EFTouch.attachInterruptOnTouch(EFTouchZone::Nose, isr_noseTouch);
-    EFTouch.attachInterruptOnRelease(EFTouchZone::Nose, isr_noseRelease);
-    EFTouch.attachInterruptOnShortpress(EFTouchZone::Nose, isr_noseShortpress);
-    EFTouch.attachInterruptOnLongpress(EFTouchZone::Nose, isr_noseLongpress);
-    EFTouch.attachInterruptOnShortpress(EFTouchZone::All, isr_allShortpress);
-    EFTouch.attachInterruptOnLongpress(EFTouchZone::All, isr_allLongpress);
+    //EFTouch.attachInterruptOnTouch(EFTouchZone::Fingerprint, isr_fingerprintTouch);
+    //EFTouch.attachInterruptOnRelease(EFTouchZone::Fingerprint, isr_fingerprintRelease);
+    //EFTouch.attachInterruptOnTouch(EFTouchZone::Nose, isr_noseTouch);
+    //EFTouch.attachInterruptOnRelease(EFTouchZone::Nose, isr_noseRelease);
 
-    // Get FSM going
-    fsm.resume();
+    //Load settings
+    pref.begin(PREF_SPACE, true);
+    EFLed.setBrightnessPercent(pref.getUInt("ledBrightPcent", 40));
+    pref.end();
 
     // Start the second core
     StartSecondCore();
@@ -267,76 +263,9 @@ void setup() {
  * @brief Main program loop
  */
 void loop() {
-    // Handler: ISR Events
-    if (isrEvents.allLongpress) {
-        fsm.queueEvent(FSMEvent::AllLongpress);
-        isrEvents.noseLongpress = false;
-        isrEvents.noseShortpress = false;
-        isrEvents.noseRelease = false;
-        isrEvents.fingerprintLongpress = false;
-        isrEvents.fingerprintShortpress = false;
-        isrEvents.fingerprintRelease = false;
-        isrEvents.allLongpress = false;
-        isrEvents.allShortpress = false;
-    }
-    if (isrEvents.allShortpress) {
-        fsm.queueEvent(FSMEvent::AllShortpress);
-        isrEvents.noseShortpress = false;
-        isrEvents.noseRelease = false;
-        isrEvents.fingerprintShortpress = false;
-        isrEvents.fingerprintRelease = false;
-        isrEvents.allShortpress = false;
-    }
-    if (isrEvents.fingerprintTouch) {
-        fsm.queueEvent(FSMEvent::FingerprintTouch);
-        isrEvents.fingerprintTouch = false;
-    }
-    if (isrEvents.fingerprintLongpress) {
-        fsm.queueEvent(FSMEvent::FingerprintLongpress);
-        isrEvents.fingerprintLongpress = false;
-        isrEvents.fingerprintShortpress = false;
-        isrEvents.fingerprintRelease = false;
-    }
-    if (isrEvents.fingerprintShortpress) {
-        fsm.queueEvent(FSMEvent::FingerprintShortpress);
-        isrEvents.fingerprintShortpress = false;
-        isrEvents.fingerprintRelease = false;
-    }
-    if (isrEvents.fingerprintRelease) {
-        fsm.queueEvent(FSMEvent::FingerprintRelease);
-        isrEvents.fingerprintRelease = false;
-    }
-
-    if (isrEvents.noseTouch) {
-        fsm.queueEvent(FSMEvent::NoseTouch);
-        isrEvents.noseTouch = false;
-    }
-    if (isrEvents.noseLongpress) {
-        fsm.queueEvent(FSMEvent::NoseLongpress);
-        isrEvents.noseLongpress = false;
-        isrEvents.noseShortpress = false;
-        isrEvents.noseRelease = false;
-    }
-    if (isrEvents.noseShortpress) {
-        fsm.queueEvent(FSMEvent::NoseShortpress);
-        isrEvents.noseShortpress = false;
-        isrEvents.noseRelease = false;
-    }
-    if (isrEvents.noseRelease) {
-        fsm.queueEvent(FSMEvent::NoseRelease);
-        isrEvents.noseRelease = false;
-    }
-
-    // Task: Handle FSM
-    if (task_fsm_handle < millis()) {
-        fsm.handle();
-        task_fsm_handle = millis() + fsm.getTickRateMs();
-    }
-
     // Task: Battery checks
     if (task_battery < millis()) {
         batteryCheck();
         task_battery = millis() + INTERVAL_BATTERY_CHECK;
     }
-	
 }

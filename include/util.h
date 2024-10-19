@@ -30,6 +30,8 @@
 #include <EFBoardPowerState.h>
 #include <EFTouchZone.h>
 
+#define PREF_SPACE "tholinpersist"
+
 const char* toString(EFBoardPowerState state);
 const char* toString(EFTouchZone zone);
 const float wave_function(float x, float start, float end, float amplitude);

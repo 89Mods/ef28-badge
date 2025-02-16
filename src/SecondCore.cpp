@@ -504,7 +504,7 @@ char uartGetNextByte() {
 }
 
 static uint32_t HandleException(uint32_t ir, uint32_t code) {
-    LOG_ERROR("mini-rv32ima UNKNOWN EXCEPTION");
+    if(code != 3 && code != 9) LOG_ERROR("mini-rv32ima UNKNOWN EXCEPTION");
     return code;
 }
 

@@ -94,7 +94,9 @@ void EFBoardClass::setup() {
 
     // Wifi modem stuff
     this->disableWifi();
-    if(!this->connectToWifi("Avalon-central-computer-core", "cutest-birb-tholin-621")) this->disableWifi();
+    #ifdef ONLINE_LINUX_IMAGE
+    if(!this->connectToWifi("abcd", "abcd")) this->disableWifi();
+    #endif
 
     LOG_INFO("(EFBoard) Initialization complete")
 }

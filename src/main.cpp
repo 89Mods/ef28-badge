@@ -255,8 +255,16 @@ void setup() {
     pref.end();
 
     // Start the second core
+    sdram_initialized = false;
     StartSecondCore();
     EFLed.setOverrides(led_overrides, led_override_values);
+    while(!sdram_initialized) sleep(5);
+    #ifdef TELNET_SHELL
+    LOG_INFO("Disconnecting WiFi");
+    EFBoard.disableWifi();
+    sleep(1);
+    WiFi.softAP("TholinLinux", "iamverycute");
+    #endif
 }
 
 /**

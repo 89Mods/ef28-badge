@@ -5,6 +5,7 @@
 
 extern volatile uint8_t led_overrides[EFLED_TOTAL_NUM];
 extern volatile uint32_t led_override_values[EFLED_TOTAL_NUM];
+extern volatile bool sdram_initialized;
 
 void StartSecondCore();
 
@@ -13,6 +14,7 @@ void StartSecondCore();
 const char* boot_server = "files.tholin.dev";
 const char* boot_url = "https://files.tholin.dev/Public/rv32_c.bin";
 
+#ifdef ONLINE_LINUX_IMAGE
 const char* root_ca = "-----BEGIN CERTIFICATE-----\n" \
 "MIIFazCCA1OgAwIBAgIRAIIQz7DSQONZRGPgu2OCiwAwDQYJKoZIhvcNAQELBQAw\n" \
 "TzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2Vh\n" \
@@ -46,8 +48,7 @@ const char* root_ca = "-----BEGIN CERTIFICATE-----\n" \
 "-----END CERTIFICATE-----";
 
 WiFiClientSecure httpsClient;
-
-static uint64_t last_rtc_access = 0;
+#endif
 
 const char* ntpServer = "pool.ntp.org";
 const long  gmtOffset_sec = 1*60*60;

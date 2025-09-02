@@ -2,12 +2,33 @@
 #include <Preferences.h>
 #include <EFLogging.h>
 #include <SDRAM.h>
+#include <SPIFLASH.h>
 #include <WiFiClientSecure.h>
 #include <EFTouch.h>
+#ifdef TELNET_SHELL
+#include "ESPTelnet.h"
+#endif
 
 #define SECOND_CORE_IMPL
 #include "SecondCore.h"
 #include "util.h"
+
+#ifdef TELNET_SHELL
+ESPTelnet telnet;
+void on_telnet_connect(String ip);
+void on_telnet_disconnect(String ip);
+void on_telnet_reconnect(String ip);
+void on_telnet_connection_attempt(String ip);
+void on_telnet_input(String str);
+void telnet_buff_flush();
+
+uint8_t telnet_in_buffer[256];
+uint16_t telnet_in_wptr = 0;
+uint16_t telnet_in_rptr = 0;
+uint8_t telnet_out_buffer[256];
+uint16_t telnet_out_wptr = 0;
+uint64_t telnet_last_w = 0;
+#endif
 
 Preferences pref2;
 
@@ -15,6 +36,7 @@ Preferences pref2;
 TaskHandle_t Task2;
 volatile uint8_t led_overrides[EFLED_TOTAL_NUM];
 volatile uint32_t led_override_values[EFLED_TOTAL_NUM];
+volatile bool sdram_initialized = false;
 
 // mini-rv32ima variables
 int fail_on_all_faults = 0;
@@ -137,6 +159,7 @@ void sdram_write_buffer(uint8_t* buff, uint16_t len, uint32_t addr) {
 }
 
 void Task2main(void* pvParameters) {
+    sdram_initialized = false;
     sleep(3);
     LOG_INFO("(2nd Core) I’m alive!");
     first_chip.init();
@@ -192,6 +215,7 @@ full_emulator_reset:
     }
 
     //Download RAM image
+    #ifdef ONLINE_LINUX_IMAGE
     httpsClient.setCACert(root_ca);
     if(!httpsClient.connect(boot_server, 443)) {
         LOG_FATAL("Download RAM image fail: Connection failed");
@@ -212,45 +236,21 @@ full_emulator_reset:
             break;
         }
     }
-    //Loads a flat image into RAM
-    /*{
-        uint8_t buffer[1024];
-        uint32_t curr_addr = 0;
-        const uint32_t size = RAM_SIZE;
-        int lastProgressI = 0;
-        putchar('\n');
-        for(uint32_t i = 0; i < size/1024; i++) {
-            float progressF = (float)i / (float)(size / 1024) * 50;
-            int progressI = (int)progressF;
-            if(progressI != lastProgressI) {
-                putchar('\r');
-                for(int i = 0; i < 52; i++) {
-                    if(i == 0 || i == 51) {
-                        putchar('|');
-                        continue;
-                    }
-                    if((i - 1) < progressI) putchar('#');
-                    else putchar(' ');
-                }
-                fflush(stdout);
-            }
-            lastProgressI = progressI;
-            int a = httpsClient.readBytes(buffer, 1024);
-            if(a != 1024) {
-                LOG_FATAL("Download RAM image fail: image incomplete");
-                vTaskDelete(NULL);
-                while(true);
-            }
-            if(curr_addr >= 8*1024*1024) second_chip.write(curr_addr - 8*1024*1024, buffer, 1024);
-            else first_chip.write(curr_addr, buffer, 1024);
-            curr_addr += 1024;
-        }
-        putchar('\r');
-        putchar('\n');
-    }*/
+    #endif
+    #ifdef ONLINE_LINUX
+    configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+    #endif
+    SPIFLASH spiflash(GPIO_NUM_7);
+    spiflash.init();
+    uint32_t stream_position = 0;
     //Loads a RLC image into RAM
     //Its not true RLC - only streams of zeroes are compressed
     {
+        #ifdef ONLINE_LINUX_IMAGE
+        #ifdef FLASH_UPDATE
+        spiflash.erase();
+        #endif
+        #endif
         uint8_t rbuffer[512];
         uint16_t rptr = 0xFFFF;
         uint8_t wbuffer[512];
@@ -267,8 +267,8 @@ full_emulator_reset:
             int progressI = (int)progressF;
             if(progressI != lastProgressI) {
                 putchar('\r');
-                for(int i = 0; i < 52; i++) {
-                    if(i == 0 || i == 51) {
+                for(int i = 0; i < 51; i++) {
+                    if(i == 0 || i == 50) {
                         putchar('|');
                         continue;
                     }
@@ -278,9 +278,20 @@ full_emulator_reset:
                 fflush(stdout);
             }
             lastProgressI = progressI;
+            if(ram_ptr >= RAM_SIZE) break;
 
             if(rptr >= 512) {
+                #ifdef ONLINE_LINUX_IMAGE
                 rem = httpsClient.readBytes(rbuffer, 512);
+                #ifdef FLASH_UPDATE
+                spiflash.write_page(stream_position, rbuffer, 256);
+                spiflash.write_page(stream_position + 256, rbuffer + 256, 256);
+                #endif
+                #else
+                spiflash.read(stream_position, rbuffer, 512);
+                rem = 512;
+                #endif
+                stream_position += rem;
                 rptr = 0;
             }
             if(rem == 0) break;
@@ -293,7 +304,9 @@ full_emulator_reset:
                 if(addr_progress != 3) continue;
                 addr_progress = 0;
                 if(wptr != 0) {
-                    sdram_write_buffer(wbuffer, wptr, ram_ptr);
+                    uint16_t to_write = wptr;
+                    if(ram_ptr + to_write >= RAM_SIZE) to_write = RAM_SIZE - ram_ptr;
+                    if(to_write) sdram_write_buffer(wbuffer, to_write, ram_ptr);
                     ram_ptr += wptr;
                     wptr = 0;
                 }
@@ -320,7 +333,9 @@ full_emulator_reset:
             }
             wbuffer[wptr++] = nb;
             if(wptr >= 512) {
-                sdram_write_buffer(wbuffer, wptr, ram_ptr);
+                uint16_t to_write = wptr;
+                if(ram_ptr + to_write >= RAM_SIZE) to_write = RAM_SIZE - ram_ptr;
+                if(to_write) sdram_write_buffer(wbuffer, wptr, ram_ptr);
                 ram_ptr += wptr;
                 wptr = 0;
             }
@@ -329,7 +344,14 @@ full_emulator_reset:
         putchar('\r');
         putchar('\n');
     }
+    #ifdef ONLINE_LINUX_IMAGE
     httpsClient.stop();
+    #ifdef FLASH_UPDATE
+    LOG_DEBUG("SPIFLASH contents updated");
+    #endif
+    #endif
+    sdram_initialized = true;
+    while(WiFi.isConnected()) sleep(1);
 
     core = (struct MiniRV32IMAState *)malloc(sizeof(struct MiniRV32IMAState));
     if(!core) {
@@ -365,6 +387,21 @@ full_emulator_reset:
     printf("Free heap after emulator allocations: %u\r\n", esp_get_free_heap_size());
     LOG_INFO("RAM Initialized, starting mini-rv32ima");
 
+    #ifdef TELNET_SHELL
+    sleep(5);
+    telnet.onConnect(on_telnet_connect);
+    telnet.onConnectionAttempt(on_telnet_connection_attempt);
+    telnet.onReconnect(on_telnet_reconnect);
+    telnet.onDisconnect(on_telnet_disconnect);
+    telnet.onInputReceived(on_telnet_input);
+    if(telnet.begin(23)) {
+        LOG_INFO("Telnet ready");
+        sleep(3);
+    }else {
+        LOG_ERROR("Telnet init fail. Telnet will not be available during this session.");
+    }
+    #endif
+
     //Run the emulator in an infinite loop
 
     //This determines the rate at which a simulated timer increments
@@ -375,6 +412,13 @@ full_emulator_reset:
     uint64_t b = (micros() / time_div);
     do {
         yield();
+        #ifdef TELNET_SHELL
+        telnet.loop();
+        if(millis() - telnet_last_w > 3000) {
+            telnet_last_w = millis();
+            if(telnet_out_wptr) telnet_buff_flush();
+        }
+        #endif
         uint64_t *this_ccount = ((uint64_t*)&(core->cyclel));
         uint32_t diff = (uint32_t)((micros() / time_div) - b);
         int ret = MiniRV32IMAStep(core, NULL, 0, diff, INSTRS_PER_FLIP); // Execute upto INSTRS_PER_FLIP cycles before breaking out.
@@ -496,11 +540,22 @@ uint32_t gpioRead(uint8_t gpio_idx, uint8_t reg) {
 
 //Stubs - Implement these if you need an interactive shell
 bool uartHasByte() {
-    return false;
+    #ifdef TELNET_SHELL
+    return telnet_in_rptr != telnet_in_wptr;
+    #else
+    return LOG_DEV_SERIAL.available() != 0;
+    #endif
 }
 
 char uartGetNextByte() {
-    return 0;
+    #ifdef TELNET_SHELL
+    if(telnet_in_rptr == telnet_in_wptr) return 0;
+    uint8_t res = telnet_in_buffer[telnet_in_rptr];
+    telnet_in_rptr = 0xFF & (telnet_in_rptr + 1);
+    return res;
+    #else
+    return LOG_DEV_SERIAL.read();
+    #endif
 }
 
 static uint32_t HandleException(uint32_t ir, uint32_t code) {
@@ -508,12 +563,30 @@ static uint32_t HandleException(uint32_t ir, uint32_t code) {
     return code;
 }
 
+#ifdef TELNET_SHELL
+void telnet_buff_flush() {
+    telnet_out_buffer[telnet_out_wptr] = 0;
+    if(telnet.isConnected()) telnet.write(telnet_out_buffer, telnet_out_wptr);
+    telnet_out_wptr = 0;
+}
+#endif
+
+void serial_putchar(uint8_t c) {
+    putchar(c);
+    #ifdef TELNET_SHELL
+    if(telnet.isConnected()) {
+        telnet_out_buffer[telnet_out_wptr++] = c;
+        if(c == '\r' || c == '\n' || telnet_out_wptr == 255) telnet_buff_flush();
+    }
+    #endif
+    //Very short delay
+    delayMicroseconds(1);
+}
+
 static uint32_t HandleControlStore(uint32_t addy, uint32_t val) {
     if(addy == 0x10000000) {
         //UART 8250 / 16550 Data Buffer
-        putchar((uint8_t)val);
-        //Very short delay
-        delayMicroseconds(1);
+        serial_putchar((uint8_t)val);
     }else if(addy == 0x11004004) { //CLNT
 		core->timermatchh = val;
     }else if(addy == 0x11004000) { //CLNT
@@ -547,16 +620,22 @@ static uint32_t HandleControlLoad(uint32_t addy) {
         if(reg < 0x7F8) return 0;
         reg -= 0x7F8;
 
-        if(millis() - last_rtc_access >= 60000) {
-            //Its been a moment - time to contact the timeserver again (just to make sure)
-            last_rtc_access = millis();
-            configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
-        }
         struct tm ts;
+        #ifdef ONLINE_LINUX
         if(!getLocalTime(&ts)) {
             LOG_WARNING("getLocalTime failed, RTC will not work");
             return 0;
         }
+        #else
+        //Use fixed time if we’re not connected to the internet
+        ts.tm_hour = 18;
+        ts.tm_min = 43;
+        ts.tm_sec = 38;
+        ts.tm_mon = 8;
+        ts.tm_mday = 2;
+        ts.tm_wday = 2;
+        ts.tm_year = 2025 - 1900;
+        #endif
         uint32_t year = ts.tm_year + 1900;
 		switch(reg) {
 			default:
@@ -610,14 +689,12 @@ static void HandleOtherCSRWrite(uint8_t * image, uint16_t csrno, uint32_t value)
         }
         if(ptrend != ptrstart) {
             for(; ptrstart <= ptrend; ptrstart++) {
-                putchar(load1(ptrstart));
-                delayMicroseconds(1);
+                serial_putchar(load1(ptrstart));
             }
         }
     }
     if(csrno == 0x139) {
-        putchar((uint8_t)value);
-        delayMicroseconds(1);
+        serial_putchar((uint8_t)value);
     }
 }
 
@@ -631,10 +708,6 @@ static int32_t HandleOtherCSRRead(uint8_t * image, uint16_t csrno) {
 
 #ifdef IMPLEMENT_CACHE
 
-//This actually turns out to be slower. Do not use.
-//Attempts to sort cache entries by address so a faster binary search can be used to find cache hits
-#undef EXPERIMENT_INSERTION_SORT
-
 //Flush a random cache entry to RAM and replace it with data from a different location in RAM
 uint8_t IRAM_ATTR swap_cache_entry(uint32_t ofs) {
     //Evicting a random entry turned out to be the most performant cache replacement policy
@@ -647,63 +720,17 @@ uint8_t IRAM_ATTR swap_cache_entry(uint32_t ofs) {
         if(e->ofs < 8*1024) first_chip.write_alligned((e->ofs << 10) + lowest, e->data + lowest, len);
         else second_chip.write_alligned(((e->ofs - 8*1024) << 10) + lowest, e->data + lowest, len);
     }
-#ifdef EXPERIMENT_INSERTION_SORT
-    //Find where the new entry would fit
-    uint8_t fit;
-    for(fit = 0; fit < CACHE_ENTRIES; fit++) {
-        if(c_entries[fit].ofs > ofs) break;
-    }
-    uint8_t *old_dptr = e->data;
-    //Found location to insert new entry
-    if(fit == random_entry) {}
-    else if(fit < random_entry) {
-        for(uint8_t i = random_entry; i > fit; i--) {
-            c_entries[i] = c_entries[i - 1];
-        }
-    }else /*if(fit > random_entry)*/ {
-        fit--;
-        if(fit != random_entry) for(uint8_t i = random_entry; i < fit; i++) {
-            if(i == CACHE_ENTRIES - 1) break;
-            c_entries[i] = c_entries[i + 1];
-        }
-    }
-    e = c_entries + fit;
-    e->data = old_dptr;
-#endif
     e->ofs = ofs;
     e->dirty = false;
     e->highest = 0;
     e->lowest = 0xFFFF;
     if(ofs < 8*1024) first_chip.read_alligned(ofs << 10, e->data, 1024);
     else second_chip.read_alligned((ofs - 8*1024) << 10, e->data, 1024);
-#ifdef EXPERIMENT_INSERTION_SORT
-    return fit;
-#else
     return random_entry;
-#endif
 }
 
 uint8_t IRAM_ATTR find_cache_entry(uint32_t block_addr) {
     uint8_t c_h = 0;
-#ifdef EXPERIMENT_INSERTION_SORT
-    //Use binary search to find the cache hit
-    c_h = 255;
-    uint8_t left = 0;
-    uint8_t right = CACHE_ENTRIES - 1;
-    while(left <= right) {
-        uint8_t middle = left + (right - left) / 2;
-        if(c_entries[middle].ofs < block_addr) left = middle + 1;
-        else if(c_entries[middle].ofs > block_addr) {
-            if(middle == 0) break;
-            right = middle - 1;
-        }
-        else {
-            c_h = middle;
-            break;
-        }
-    }
-    if(c_h == 255) c_h = swap_cache_entry(block_addr);
-#else
     if(c_entries[recent_entry].ofs == block_addr) return recent_entry;
     if(c_entries[second_recent_entry].ofs == block_addr) return second_recent_entry;
     for(;c_h < CACHE_ENTRIES; c_h++) {
@@ -719,7 +746,6 @@ uint8_t IRAM_ATTR find_cache_entry(uint32_t block_addr) {
     if(c_h >= CACHE_ENTRIES) c_h = swap_cache_entry(block_addr);
     second_recent_entry = recent_entry;
     recent_entry = c_h;
-#endif
     return c_h;
 }
 
@@ -883,3 +909,38 @@ static inline uint8_t store1(uint32_t ofs, uint8_t val) {
 #endif
     return val;
 }
+
+#ifdef TELNET_SHELL
+void on_telnet_connect(String ip) {
+    LOG_INFO("Telnet connection opened");
+    telnet.println("You've connected to Tholin's Cyber LED Badge running Linux. Please be nice.");
+    telnet.println("(Use ^] + q  to disconnect.)");
+    telnet.println("");
+    if(watchdog_enabled) telnet.print("~ # ");
+}
+
+void on_telnet_disconnect(String ip) {
+    LOG_INFO("Telnet connection closed");
+}
+
+void on_telnet_reconnect(String ip) {
+
+}
+
+void on_telnet_connection_attempt(String ip) {
+    
+}
+
+void on_telnet_input(String str) {
+    //LOG_DEV_SERIAL.println(str);
+    uint16_t refptr = 0xFF & (telnet_in_rptr - 1);
+    for(int i = 0; i < str.length() + 1; i++) {
+        if(telnet_in_wptr == refptr) {
+            telnet.println("Error: Buffer overflow!");
+            return;
+        }
+        telnet_in_buffer[telnet_in_wptr] = i == str.length() ? '\n' : str.charAt(i);
+        telnet_in_wptr = (telnet_in_wptr + 1) & 0xFF;
+    }
+}
+#endif

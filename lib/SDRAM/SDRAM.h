@@ -6,6 +6,8 @@
 #define SPI_MISO_PIN GPIO_NUM_12
 #define QPI_D2_PIN GPIO_NUM_8
 #define QPI_D3_PIN GPIO_NUM_18
+#define SDRAM_DEFAULT_CS_PIN_0 GPIO_NUM_11
+#define SDRAM_DEFAULT_CS_PIN_1 GPIO_NUM_47
 
 #include <stdint.h>
 #include <driver/spi_master.h>

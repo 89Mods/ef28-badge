@@ -96,8 +96,8 @@ const uint32_t RAM_SIZE = 16777216UL; // Minimum RAM amount (in bytes), just tes
 
 #include "mini-rv32ima.h"
 
-SDRAM first_chip(GPIO_NUM_11);
-SDRAM second_chip(GPIO_NUM_47);
+SDRAM first_chip(SDRAM_DEFAULT_CS_PIN_0);
+SDRAM second_chip(SDRAM_DEFAULT_CS_PIN_1);
 
 bool watchdog_enabled = false;
 bool watchdog_clr_edge = false;
@@ -240,7 +240,7 @@ full_emulator_reset:
     #ifdef ONLINE_LINUX
     configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
     #endif
-    SPIFLASH spiflash(GPIO_NUM_7);
+    SPIFLASH spiflash(FLASH_DEFAULT_CS_PIN);
     spiflash.init();
     uint32_t stream_position = 0;
     //Loads a RLC image into RAM

@@ -1,6 +1,6 @@
 # Linux on Eurofurence 28 Cyber Badge
 
-This is my attempt at doing something crauy with the EF badge, in this case, booting Linux by emulating a RISC-V procesor.
+This is my attempt at doing something crazy with the EF badge, in this case, booting Linux by emulating a RISC-V procesor.
 
 This project was made possible by [mini-rv32ima](https://github.com/cnlohr/mini-rv32ima).
 

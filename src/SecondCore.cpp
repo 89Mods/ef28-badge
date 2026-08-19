@@ -103,6 +103,9 @@ bool watchdog_enabled = false;
 bool watchdog_clr_edge = false;
 bool leds_latch_edge = false;
 uint64_t last_watchdog_time;
+#ifdef ONLINE_LINUX
+bool time_initialized = false;
+#endif
 
 void err_leds() {
     for(uint8_t i = 0; i < EFLED_TOTAL_NUM; i++) led_overrides[i] = 0;
@@ -216,39 +219,49 @@ full_emulator_reset:
 
     //Download RAM image
     #ifdef ONLINE_LINUX_IMAGE
-    httpsClient.setCACert(root_ca);
-    if(!httpsClient.connect(boot_server, 443)) {
-        LOG_FATAL("Download RAM image fail: Connection failed");
-        vTaskDelete(NULL);
-        while(true);
-    }
-    httpsClient.print("GET ");
-    httpsClient.print(boot_url);
-    httpsClient.println(" HTTP/1.0");
-    httpsClient.print("Host: ");
-    httpsClient.println(boot_server);
-    httpsClient.println("Connection: close");
-    httpsClient.println();
-    //Skip headers
-    while(httpsClient.connected()) {
-        String line = httpsClient.readStringUntil('\n');
-        if(line == "\r") {
-            break;
+    if(WiFi.isConnected()) {
+        httpsClient.setCACert(root_ca);
+        if(!httpsClient.connect(boot_server, 443)) {
+            LOG_FATAL("Download RAM image fail: Connection failed");
+            vTaskDelete(NULL);
+            while(true);
         }
-    }
+        httpsClient.print("GET ");
+        httpsClient.print(boot_url);
+        httpsClient.println(" HTTP/1.0");
+        httpsClient.print("Host: ");
+        httpsClient.println(boot_server);
+        httpsClient.println("Connection: close");
+        httpsClient.println();
+        //Skip headers
+        while(httpsClient.connected()) {
+            String line = httpsClient.readStringUntil('\n');
+            if(line == "\r") {
+                break;
+            }
+        }
+    }else LOG_WARNING("No WiFi connection found - falling back to spiflash OS image!");
     #endif
     #ifdef ONLINE_LINUX
-    configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+    if(WiFi.isConnected()) {
+        configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+        struct tm ts;
+        getLocalTime(&ts);
+        time_initialized = true;
+    }
     #endif
     SPIFLASH spiflash(FLASH_DEFAULT_CS_PIN);
     spiflash.init();
     uint32_t stream_position = 0;
+    #ifdef FLASH_UPDATE
+    bool spiflash_update_success = false;
+    #endif
     //Loads a RLC image into RAM
     //Its not true RLC - only streams of zeroes are compressed
     {
         #ifdef ONLINE_LINUX_IMAGE
         #ifdef FLASH_UPDATE
-        spiflash.erase();
+        if(WiFi.isConnected()) spiflash.erase();
         #endif
         #endif
         uint8_t rbuffer[512];
@@ -282,15 +295,23 @@ full_emulator_reset:
 
             if(rptr >= 512) {
                 #ifdef ONLINE_LINUX_IMAGE
-                rem = httpsClient.readBytes(rbuffer, 512);
-                #ifdef FLASH_UPDATE
-                spiflash.write_page(stream_position, rbuffer, 256);
-                spiflash.write_page(stream_position + 256, rbuffer + 256, 256);
+                if(WiFi.isConnected()) {
+                    rem = httpsClient.readBytes(rbuffer, 512);
+                    #ifdef FLASH_UPDATE
+                    spiflash.write_page(stream_position, rbuffer, 256);
+                    spiflash.write_page(stream_position + 256, rbuffer + 256, 256);
+                    spiflash_update_success = true;
+                    #endif
+                }
                 #endif
+                #ifdef ONLINE_LINUX_IMAGE
+                if(!WiFi.isConnected()) {
                 #else
+                {
+                #endif
                 spiflash.read(stream_position, rbuffer, 512);
                 rem = 512;
-                #endif
+                }
                 stream_position += rem;
                 rptr = 0;
             }
@@ -345,13 +366,16 @@ full_emulator_reset:
         putchar('\n');
     }
     #ifdef ONLINE_LINUX_IMAGE
-    httpsClient.stop();
+    if(WiFi.isConnected()) httpsClient.stop();
     #ifdef FLASH_UPDATE
-    LOG_DEBUG("SPIFLASH contents updated");
+    if(spiflash_update_success) LOG_WARNING("SPIFLASH contents updated");
     #endif
     #endif
     sdram_initialized = true;
+    #ifdef TELNET_SHELL
+    sleep(1);
     while(WiFi.isConnected()) sleep(1);
+    #endif
 
     core = (struct MiniRV32IMAState *)malloc(sizeof(struct MiniRV32IMAState));
     if(!core) {
@@ -384,7 +408,7 @@ full_emulator_reset:
 
     yield();
     yield();
-    printf("Free heap after emulator allocations: %u\r\n", esp_get_free_heap_size());
+    LOGF_INFO("Free heap after emulator allocations: %u\r\n", esp_get_free_heap_size());
     LOG_INFO("RAM Initialized, starting mini-rv32ima");
 
     #ifdef TELNET_SHELL
@@ -622,20 +646,24 @@ static uint32_t HandleControlLoad(uint32_t addy) {
 
         struct tm ts;
         #ifdef ONLINE_LINUX
-        if(!getLocalTime(&ts)) {
-            LOG_WARNING("getLocalTime failed, RTC will not work");
-            return 0;
-        }
+        if(time_initialized) {
+            if(!getLocalTime(&ts)) {
+                LOG_WARNING("getLocalTime failed, RTC will not work");
+                return 0;
+            }
+        }else {
         #else
-        //Use fixed time if we’re not connected to the internet
-        ts.tm_hour = 18;
-        ts.tm_min = 43;
-        ts.tm_sec = 38;
-        ts.tm_mon = 8;
-        ts.tm_mday = 2;
-        ts.tm_wday = 2;
-        ts.tm_year = 2025 - 1900;
+        {
         #endif
+        //Use fixed time if we’re not connected to the internet
+        ts.tm_hour = 14;
+        ts.tm_min = 23;
+        ts.tm_sec = 28;
+        ts.tm_mon = 7;
+        ts.tm_mday = 19;
+        ts.tm_wday = 3;
+        ts.tm_year = 2026 - 1900;
+        }
         uint32_t year = ts.tm_year + 1900;
 		switch(reg) {
 			default:

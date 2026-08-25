@@ -120,7 +120,7 @@ void SPIFLASH::erase() {
     send_cmd(0xC7);
     digitalWrite(cs_pin, HIGH);
     busy_wait();
-    LOG_DEBUG("SPIFLASH erased");
+    LOG_INFO("SPIFLASH erased");
 }
 
 void SPIFLASH::write_page(uint32_t addr, uint8_t *buffer, uint16_t len) {

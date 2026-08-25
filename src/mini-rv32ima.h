@@ -198,8 +198,7 @@ MINIRV32_STEPPROTO
 				}
 				case 0x63: // Branch (0b1100011)
 				{
-					uint32_t immm4 = ((ir & 0xf00)>>7) | ((ir & 0x7e000000)>>20) | ((ir & 0x80) << 4) | ((ir >> 31)<<12);
-					if( immm4 & 0x1000 ) immm4 |= 0xffffe000;
+					uint32_t immm4 = ((ir & 0xf00)>>7) | ((ir & 0x7e000000)>>20) | ((ir & 0x80) << 4) | ((uint32_t)((int32_t)ir >> 19) & 0xfffff000); //7.036 -> 7.024
 					int32_t rs1 = REG((ir >> 15) & 0x1f);
 					int32_t rs2 = REG((ir >> 20) & 0x1f);
 					immm4 = pc + immm4 - 4;
